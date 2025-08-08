@@ -1,0 +1,318 @@
+{
+  "name": "Margin master",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "margin-master",
+        "responseMode": "responseNode",
+        "options": {
+          "rawBody": false
+        }
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        15
+      ],
+      "id": "efa61b28-9365-4e11-a65f-332d4f1e130b",
+      "name": "Webhook",
+      "webhookId": "7f60c976-973d-479c-9638-f345fc634a72"
+    },
+    {
+      "parameters": {
+        "url": "=https://api.eia.gov/v2/electricity/retail-sales/data?data[]=price&facets[stateid][]={{ $json.state }}&frequency=monthly&sort[0][column]=period&sort[0][direction]=desc&length=1",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        440,
+        -160
+      ],
+      "id": "d32e585c-64fa-4ed8-9dc1-b6e0a3c4a7be",
+      "name": "Fetch EIA Data",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "hfYhxX71lgURVo9C",
+          "name": "EIA_API_KEY"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const userInput = items[0].json;\n\n// List of valid US state codes\nconst validStates = ['AL', 'AK', 'AZ', 'AR', 'CA', 'CO', 'CT', 'DE', 'FL', 'GA', 'HI', 'ID', 'IL', 'IN', 'IA', 'KS', 'KY', 'LA', 'ME', 'MD', 'MA', 'MI', 'MN', 'MS', 'MO', 'MT', 'NE', 'NV', 'NH', 'NJ', 'NM', 'NY', 'NC', 'ND', 'OH', 'OK', 'OR', 'PA', 'RI', 'SC', 'SD', 'TN', 'TX', 'UT', 'VT', 'VA', 'WA', 'WV', 'WI', 'WY'];\n\n// Check if state is provided and valid\nif (!userInput.state) {\n  throw new Error('State code is missing in the input payload');\n}\nif (!validStates.includes(userInput.state)) {\n  throw new Error(`Invalid state code: ${userInput.state}. Must be a valid US state code (e.g., CA, NY).`);\n}\n\n// Pass through the input data if valid\nreturn items;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        -80
+      ],
+      "id": "aca2a9df-a7bf-430b-a1a9-10a9454450c5",
+      "name": "Validate state"
+    },
+    {
+      "parameters": {
+        "jsCode": "const eiaResponse = items[0].json;\nconst inputState = items[0].json.state || 'unknown';\n\n// Check for API errors (e.g., 401, 400)\nif (eiaResponse.error) {\n  throw new Error(`EIA API error: ${eiaResponse.error} (Code: ${eiaResponse.code})`);\n}\n\n// Check for valid response structure\nif (!eiaResponse.response || !eiaResponse.response.hasOwnProperty('data')) {\n  throw new Error('Invalid EIA API response structure. API may be down or misconfigured.');\n}\n\n// Check for empty data\nif (eiaResponse.response.data.length === 0 || eiaResponse.response.total === 0) {\n  throw new Error(`No electricity price data for state: ${inputState}. Check API configuration or data availability.`);\n}\n\n// Extract price and convert to USD/kWh\nconst priceString = eiaResponse.response.data[0].price;\nconst electricityPrice = priceString ? parseFloat(priceString) / 100 : null;\nif (!electricityPrice || isNaN(electricityPrice) || electricityPrice <= 0) {\n  throw new Error('Invalid electricity price received from EIA API.');\n}\n\n// Extract warnings\nconst warnings = eiaResponse.response.warnings || [];\nconst apiWarning = warnings.length > 0 ? warnings.map(w => `${w.warning}: ${w.description}`).join('; ') : null;\n\n// Return cleaned data\nreturn [{\n  json: {\n    electricity_price: electricityPrice, // USD/kWh (e.g., 0.1095 for UT)\n    api_warning: apiWarning, // e.g., \"incomplete return: ...\"\n    state: eiaResponse.response.data[0].stateid, // e.g., \"UT\"\n    period: eiaResponse.response.data[0].period // e.g., \"2025-02\"\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        660,
+        -160
+      ],
+      "id": "857de132-9052-4b20-a376-4769f373aa5c",
+      "name": "Clean EIA Data"
+    },
+    {
+      "parameters": {
+        "jsCode": "const userInput = items[0].json;\n\n// Attempt to access payload directly or from a nested 'body' field\nconst payload = userInput.body || userInput;\n\n// Log the payload for debugging\nconsole.log('Webhook Payload:', JSON.stringify(payload));\n\n// Filter code mappings\nconst materialFilters = {\n  'PLA': 'MDIKZ',\n  'ABS': '8HXEW',\n  'PETG': 'URD9Q',\n  'TOUGH PLA': '2E6UT',\n  'ASA': 'DOFPK',\n  'NYLON': '3VTGQ',\n  'METAL': '8BU67',\n  'CARBON FIBER': '4IJSH',\n  'PVA': 'ZXQKE',\n  'BREAKAWAY SUPPORT': 'W4SI4',\n  'HIPS': 'JQFVV',\n  'POLYCARBONATE': 'M7I5Q',\n  'PC-ABS': 'SN7VK',\n  'POLYPROPYLENE': 'BWSPO',\n  'TPU': 'TXHUC'\n};\n\nconst diameterFilters = {\n  '1.75': 'Y7VDJ',\n  '2.85': 'CR1IB'\n};\n\nconst spoolWeightFilters = {\n  '0.5': 'N7XEC',\n  '0.75': 'QNJUD',\n  '1': '4T93C',\n  '3': 'APJ1Z',\n  '5': 'T4CKY',\n  '10': 'ZS5N7'\n};\n\n// Validate material type\nconst materialType = payload.material_type ? payload.material_type.toUpperCase() : null;\nif (!materialType || !materialFilters[materialType]) {\n  throw new Error(`Invalid or unsupported material type: ${payload.material_type || 'missing'}. Supported types: ${Object.keys(materialFilters).join(', ')}`);\n}\n\n// Default diameter to 1.75mm if not specified\nconst diameter = payload.diameter || '1.75'; // Add diameter to payload if needed\nconst diameterFilter = diameterFilters[diameter];\nif (!diameterFilter) {\n  throw new Error(`Invalid diameter: ${diameter}. Supported diameters: ${Object.keys(diameterFilters).join(', ')}`);\n}\n\n// Validate spool weight\nconst spoolWeight = payload.material_quantity ? String(payload.material_quantity) : null;\nif (!spoolWeight || !spoolWeightFilters[spoolWeight]) {\n  throw new Error(`Invalid or unsupported spool weight: ${payload.material_quantity || 'missing'}. Supported weights: ${Object.keys(spoolWeightFilters).join(', ')}`);\n}\n\n// Construct the URL\nconst filters = [materialFilters[materialType], diameterFilter, spoolWeightFilters[spoolWeight]].join(',');\nconst url = `https://www.matterhackers.com/store/c/3d-printer-filament?filters=${filters}`;\n\n// Return the URL and pass through other data\nreturn [{\n  json: {\n    ...payload,\n    matterhackers_url: url // e.g., https://www.matterhackers.com/store/c/3d-printer-filament?filters=MDIKZ,Y7VDJ,N7XEC\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        165
+      ],
+      "id": "a6721204-f922-43fd-b185-45ae2ab0a58c",
+      "name": "Search Filament Cost"
+    },
+    {
+      "parameters": {
+        "jsCode": "const response = items[0].json;\n\n// Log the response for debugging\nconsole.log('Scrape MatterHackers Response:', JSON.stringify(response));\n\n// Extract the Markdown string\nlet markdown;\nif (typeof response === 'string') {\n  markdown = response;\n} else if (response && typeof response === 'object') {\n  markdown = response.data || response.content || response.markdown || JSON.stringify(response);\n} else {\n  throw new Error('Unexpected response format from MatterHackers scraping. Expected a string or object with Markdown content.');\n}\n\n// Verify markdown is a string\nif (typeof markdown !== 'string') {\n  throw new Error('Markdown content is not a string. Found type: ' + typeof markdown);\n}\n\n// Find the relevant section\nconst startMarker = 'Filtered Results';\nconst endMarker = 'BROWSE ALL 3D PRINTER FILAMENT';\nconst startIndex = markdown.indexOf(startMarker);\nconst endIndex = markdown.indexOf(endMarker, startIndex);\n\nif (startIndex === -1 || endIndex === -1) {\n  throw new Error('Could not find the relevant section in the scraped content. Page structure may have changed.');\n}\n\n// Extract the section\nconst relevantSection = markdown.substring(startIndex + startMarker.length, endIndex).trim();\n\n// Log the section for debugging\nconsole.log('Relevant Section:', relevantSection);\n\n// Extract prices with a flexible regex\nconst priceRegex = /\\$([\\d,]+\\.?\\d*)/g;\nconst prices = [];\nlet match;\nwhile ((match = priceRegex.exec(relevantSection)) !== null) {\n  const price = parseFloat(match[1].replace(/,/g, ''));\n  if (!isNaN(price)) {\n    prices.push(price);\n  }\n}\n\n// Validate prices\nif (prices.length === 0) {\n  throw new Error('No filament prices found in the relevant section of the MatterHackers page.');\n}\n\n// Log the extracted prices for debugging\nconsole.log('Extracted Prices:', prices);\n\n// Calculate the average price\nconst total = prices.reduce((sum, price) => sum + price, 0);\nconst averagePrice = total / prices.length;\n\n// Shift the decimal point two places to the left (divide by 100)\nconst adjustedPrice = averagePrice / 100;\n\n// Round to two decimal places\nconst roundedPrice = parseFloat(adjustedPrice.toFixed(2));\n\n// Return the adjusted and rounded price\nreturn [{\n  json: {\n    filament_price: roundedPrice // e.g., 35.54\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        660,
+        165
+      ],
+      "id": "45aaa2e7-f652-42c8-b03f-b91cee26dc34",
+      "name": "Parse Filament data"
+    },
+    {
+      "parameters": {
+        "url": "=https://r.jina.ai/{{ $json.matterhackers_url }}",
+        "options": {
+          "timeout": 100000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        440,
+        165
+      ],
+      "id": "c07739bc-5468-4271-bfc7-2a7971369aef",
+      "name": "Scrape Filament Cost",
+      "retryOnFail": true,
+      "maxTries": 2
+    },
+    {
+      "parameters": {
+        "numberInputs": 3
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.1,
+      "position": [
+        880,
+        -10
+      ],
+      "id": "b8e57664-8bde-48e7-be6d-758cdece7256",
+      "name": "Merge"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Combine all items into a single object\nconst combinedData = {};\nitems.forEach(item => {\n  Object.assign(combinedData, item.json);\n});\n\n// Validate user inputs\nif (!combinedData.state) {\n  throw new Error('Missing required input: state');\n}\nif (!combinedData.wattage || typeof combinedData.wattage !== 'number' || combinedData.wattage <= 0) {\n  throw new Error('Wattage must be a positive number');\n}\nif (combinedData.efficiency !== undefined && (typeof combinedData.efficiency !== 'number' || combinedData.efficiency <= 0 || combinedData.efficiency > 1)) {\n  throw new Error('Efficiency must be between 0 and 1');\n}\nif (!combinedData.production_time || typeof combinedData.production_time !== 'number' || combinedData.production_time <= 0) {\n  throw new Error('Production time must be a positive number');\n}\nif (!combinedData.material_type) {\n  throw new Error('Missing required input: material_type');\n}\nif (!combinedData.material_quantity || typeof combinedData.material_quantity !== 'number' || combinedData.material_quantity <= 0) {\n  throw new Error('Material quantity must be a positive number');\n}\nif (combinedData.selling_price !== undefined && (typeof combinedData.selling_price !== 'number' || combinedData.selling_price <= 0)) {\n  throw new Error('Selling price must be a positive number or null');\n}\n\n// Validate electricity price\nif (!combinedData.electricity_price || isNaN(combinedData.electricity_price) || combinedData.electricity_price <= 0) {\n  throw new Error('Invalid or missing electricity price from EIA data');\n}\n\n// Validate filament price\nif (!combinedData.filament_price || isNaN(combinedData.filament_price) || combinedData.filament_price <= 0) {\n  throw new Error('Invalid or missing filament price from MatterHackers');\n}\n\n// Combine warnings\nlet warning = null;\nif (combinedData.efficiency === undefined) {\n  warning = 'Using default efficiency (0.9). Specify your printer\\'s efficiency for better accuracy.';\n}\nif (combinedData.api_warning) {\n  warning = warning ? `${warning}; ${combinedData.api_warning}` : combinedData.api_warning;\n}\n\n// Return validated data as a single item\nreturn [{\n  json: {\n    state: combinedData.state,\n    wattage: combinedData.wattage,\n    efficiency: combinedData.efficiency || 0.9,\n    production_time: combinedData.production_time,\n    material_type: combinedData.material_type,\n    material_quantity: combinedData.material_quantity,\n    selling_price: combinedData.selling_price,\n    slack_webhook_url: combinedData.slack_webhook_url,\n    electricity_price: combinedData.electricity_price,\n    filament_price: combinedData.filament_price,\n    warning,\n    eia_period: combinedData.period\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1100,
+        -10
+      ],
+      "id": "24d6bf28-faa4-4f10-a0c8-69419e499e59",
+      "name": "Fetch and validate data"
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = items[0].json;\n\n// Log the input for debugging\nconsole.log('Compute Costs Input:', JSON.stringify(data));\n\n// Calculate electricity cost\nconst electricityCost = (data.wattage / 1000) * data.production_time * data.electricity_price / data.efficiency;\n\n// Calculate material cost\nconst materialCost = data.material_quantity * data.filament_price;\n\n// Calculate total cost\nconst totalCost = electricityCost + materialCost;\n\n// Calculate margin if selling price is provided\nlet margin = null;\nif (data.selling_price !== undefined && data.selling_price > 0) {\n  margin = ((data.selling_price - totalCost) / data.selling_price) * 100;\n  margin = parseFloat(margin.toFixed(2)); // Round to 2 decimal places\n}\n\n// Round costs to 2 decimal places\nconst roundedElectricityCost = parseFloat(electricityCost.toFixed(2));\nconst roundedMaterialCost = parseFloat(materialCost.toFixed(2));\nconst roundedTotalCost = parseFloat(totalCost.toFixed(2));\n\n// Return results\nreturn [{\n  json: {\n    state: data.state,\n    material_type: data.material_type,\n    electricity_cost: roundedElectricityCost,\n    material_cost: roundedMaterialCost,\n    total_cost: roundedTotalCost,\n    margin: margin,\n    selling_price: data.selling_price,\n    warning: data.warning,\n    eia_period: data.eia_period\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1320,
+        -10
+      ],
+      "id": "bdfb878e-2fcc-4d91-9624-c58c10229e56",
+      "name": "Computation"
+    },
+    {
+      "parameters": {
+        "respondWith": "allIncomingItems",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.2,
+      "position": [
+        1540,
+        -10
+      ],
+      "id": "345dba32-acd2-4e5d-9ab2-7ddf56a768e2",
+      "name": "Respond to Webhook"
+    }
+  ],
+  "pinData": {
+    "Webhook": [
+      {
+        "json": {
+          "state": "SD",
+          "wattage": 500,
+          "efficiency": 0.9,
+          "production_time": 2,
+          "material_type": "ABS",
+          "material_quantity": 1,
+          "selling_price": 30,
+          "slack_webhook_url": "your_slack_webhook"
+        }
+      }
+    ]
+  },
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Validate state",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Search Filament Cost",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch EIA Data": {
+      "main": [
+        [
+          {
+            "node": "Clean EIA Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate state": {
+      "main": [
+        [
+          {
+            "node": "Fetch EIA Data",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Clean EIA Data": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Search Filament Cost": {
+      "main": [
+        [
+          {
+            "node": "Scrape Filament Cost",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Scrape Filament Cost": {
+      "main": [
+        [
+          {
+            "node": "Parse Filament data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Filament data": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 2
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "Fetch and validate data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch and validate data": {
+      "main": [
+        [
+          {
+            "node": "Computation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Computation": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "d77e7c85-98eb-4276-a16d-f27b94bd7451",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "a4bd0bfdfffebe31b4c068baa5abc28ea8b90d4e060f8e9828a109705dc34595"
+  },
+  "id": "XN8AG6BKRowoTmSH",
+  "tags": []
+}
