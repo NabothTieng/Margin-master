@@ -1,9 +1,9 @@
 # Margin Master
 
-<p align="center">A 3D printing margin calculator built with n8n and Docker.</p>
+A 3D printing margin Agent built with n8n and Docker.
 
 ## Overview
-Margin Master calculates profit margins for 3D printing projects by factoring in electricity and filament costs. It uses real-time data from the EIA API for electricity prices and MatterHackers for filament prices, processed within an n8n workflow (version 1.90.2) running in Docker.
+Margin Master Agent calculates profit margins for 3D printing projects by factoring in electricity and filament costs. It uses real-time data from the EIA API for electricity prices and MatterHackers for filament prices, processed within an n8n workflow (version 1.90.2) running in Docker.
 
 ## Setup Instructions
 1. **Clone the Repository**:
@@ -57,3 +57,5 @@ Expected response:
 - **Efficiency**: Accounts for printer efficiency (default 90%) to adjust electricity costs.
 - **Materials**: Supports 15 filament types (e.g., ABS, PLA, PETG).
 - **Computation**: Calculates costs using real-time data, with margin set to 0 for losses (pending discussion on negative margins).
+
+**Contact me through my email for any queries** *Nabothtieng@gmail.com*
